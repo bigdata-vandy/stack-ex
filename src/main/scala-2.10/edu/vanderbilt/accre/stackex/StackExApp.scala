@@ -3,8 +3,11 @@
   */
 package edu.vanderbilt.accre.stackex
 
-import edu.vanderbilt.accre.xmltojson.XMLToJSON
+import edu.vanderbilt.accre.xmltojson.XMLToJSONConverter
 import org.apache.spark.{SparkConf, SparkContext}
+
+
+class Converter extends XMLToJSONConverter
 
 object StackExApp {
 
@@ -16,6 +19,7 @@ object StackExApp {
     }
     (args(0), args(1))
   }
+
 
   def main(args: Array[String]): Unit = {
 
@@ -31,8 +35,10 @@ object StackExApp {
 
     val fString = (s: String) => s
 
+    val converter = new Converter
+
     val postsJSON = postsXML
-      .map(line => XMLToJSON.xmlToJson(line, Map("Body" -> fString)))
+      .map(line => converter.xmlToJson(line, Map("Body" -> fString)))
 
     if (true) {
       (postsJSON take 10) foreach println

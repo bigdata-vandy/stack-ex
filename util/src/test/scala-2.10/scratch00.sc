@@ -1,4 +1,4 @@
-import edu.vanderbilt.accre.xmltojson.XMLToJSON
+import edu.vanderbilt.accre.xmltojson.XMLToJSONConverter
 import edu.xmlparsing._
 
 import scala.xml.{Node, NodeSeq, XML}
@@ -16,7 +16,7 @@ elem \\ "b"
 
 elem.isInstanceOf[Node]
 
-XMLToJSON.loadString("<row>fooey</row>").text
+XMLToJSONConverter.loadString("<row>fooey</row>").text
 
 val deb =
   Try (
@@ -25,12 +25,12 @@ val deb =
     )
   ) getOrElse NodeSeq.Empty
 
-XMLToJSON.loadString("<a><item></item></a>")
+XMLToJSONConverter.loadString("<a><item></item></a>")
 
-XMLToJSON.loadString("""<a Body="foo" />""").text
+XMLToJSONConverter.loadString("""<a Body="foo" />""").text
 
-XMLToJSON.loadString("""<?xml version="1.0" encoding="utf-8"?>""")
-XMLToJSON.loadString("""<posts>""")
+XMLToJSONConverter.loadString("""<?xml version="1.0" encoding="utf-8"?>""")
+XMLToJSONConverter.loadString("""<posts>""")
 
 NodeSeq.Empty.text
 "@" + "Body"
@@ -54,4 +54,4 @@ val s =
 
 val joe = XML.loadString(s)
 
-XMLToJSON.getAttributes(joe, Map("Body" -> ))
+XMLToJSONConverter.getAttributes(joe, Map("Body" -> ))
