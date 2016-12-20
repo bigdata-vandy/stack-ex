@@ -7,8 +7,6 @@ import edu.vanderbilt.accre.xmltojson.XMLToJSONConverter
 import org.apache.spark.{SparkConf, SparkContext}
 
 
-class Converter extends XMLToJSONConverter
-
 object StackExApp {
 
   def parseArgs(args: Array[String]) = {
@@ -34,11 +32,10 @@ object StackExApp {
     val postsXML = sc.textFile(postsFile)
 
     val fString = (s: String) => s
-
-    val converter = new Converter
+    val converter = XMLToJSONConverter(Map("Body" -> fString))
 
     val postsJSON = postsXML
-      .map(line => converter.xmlToJson(line, Map("Body" -> fString)))
+      .map(line => converter.xmlToJson(line))
 
     if (true) {
       (postsJSON take 10) foreach println
