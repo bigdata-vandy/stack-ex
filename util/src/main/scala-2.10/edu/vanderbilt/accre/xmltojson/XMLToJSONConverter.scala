@@ -14,7 +14,7 @@ object XMLToJSONConverter {
   type AttributeMap = Map[String, String => Any]
 
 
-  class XMLToJSONConverter(attributeMapper: AttributeMap) {
+  class XMLToJSONConverter(attributeMapper: AttributeMap) extends Serializable {
 
     /**
       * Parses a possibly malformed XML string and returns an XML element
@@ -74,6 +74,7 @@ object XMLToJSONConverter {
     val attrMap = (for (v <- attrs) yield v -> ident).toMap
     new XMLToJSONConverter(attrMap)
   }
+
 
   def apply(attrMap: AttributeMap) =
     new XMLToJSONConverter(attrMap)

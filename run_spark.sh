@@ -7,27 +7,24 @@ fi
 
 echo $SPARK_HOME
 
-#input1=spark_read_me.txt
-#input1=stack/math.stackexchange.com/Posts.xml.gz
-#input1=stack/stackoverflow.stackexchange.com/Comments.xml.gz
-input1=stack/stackoverflow.stackexchange.com/Posts.xml.gz
-
+input1=src/main/resources/Posts.xml
+output=output
 
 echo Reading input from $input1
-echo Writing output to $output_dir
+echo Writing output to $output
 
 APP="
-    target/scala-2.11/stack-ex-assembly-0.1.0.jar \
+    target/scala-2.10/core-assembly-0.1.0.jar \
     $input1 \
-    $output_dir
+    $output
     "
 
 
-flag=2
+flag=0
 if [ ${flag} == 0 ]; then
   # Run application locally
   $SPARK_HOME/bin/spark-submit \
-    --class WordCountApp \
+    --class edu.vanderbilt.accre.stackex.StackExApp \
     --master "local[*]" \
     $APP
 elif [ ${flag} == 1 ]; then
