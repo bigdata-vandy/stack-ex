@@ -1,4 +1,4 @@
-import edu.vanderbilt.accre.xmltojson.XMLToJSONConverter
+import edu.vanderbilt.accre.xmltools.XMLToJSONConverter
 import edu.xmlparsing._
 
 import scala.xml.{Node, NodeSeq, XML}

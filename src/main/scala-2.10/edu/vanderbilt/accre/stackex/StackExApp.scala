@@ -1,7 +1,5 @@
 package edu.vanderbilt.accre.stackex
 
-import edu.vanderbilt.accre.xmltojson.XMLToJSONConverter
-import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.sql.SQLContext
 
@@ -28,31 +26,8 @@ object StackExApp {
 
     val conf = new SparkConf()
       .setAppName("Stack-Ex Application")
+
     val sc = new SparkContext(conf)
-
-
-    def xmlToCustomJson() = {
-      // Creates a new RDD with one XML element per line
-      val postsXML = sc.textFile(postsFile)
-
-      // Specifies how to convert the data
-      val attributeMapper = Map(
-        "Body" -> getTextFromHtml,
-        "Tags" -> getTags
-      )
-
-      val converter = XMLToJSONConverter(attributeMapper)
-
-      val postsJSON = postsXML
-        .map(line => converter.xmlToJson(line))
-
-      if (true) {
-        (postsJSON take 10) foreach println
-      }
-
-      postsJSON.saveAsTextFile(outputFile)
-
-    }
 
 
     def writeXMLToJSON() = {
@@ -74,7 +49,6 @@ object StackExApp {
     }
 
     writeXMLToJSON()
-
 
     sc.stop()
 
