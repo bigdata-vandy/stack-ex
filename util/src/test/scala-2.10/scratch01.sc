@@ -25,3 +25,13 @@ x match {
 
 JsonAST.JInt(1234).isInstanceOf[JsonAST.JValue]
 
+val jarray = JsonAST.JArray(List("deb"))
+
+jarray.isInstanceOf[JsonAST.JValue]
+json.compactRender(jarray)
+
+val jmap = Map("joe" -> jarray)
+
+json.compactRender(jmap)
+
+List("deb","joe") map JsonAST.JString

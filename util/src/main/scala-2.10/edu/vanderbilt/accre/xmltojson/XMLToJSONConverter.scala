@@ -24,7 +24,7 @@ object XMLToJSONConverter {
       *
       */
     private def loadString(line: String): NodeSeq =
-    Try(XML.loadString(line)) getOrElse NodeSeq.Empty
+      Try(XML.loadString(line)) getOrElse NodeSeq.Empty
 
 
     /**
@@ -45,18 +45,21 @@ object XMLToJSONConverter {
       * @param m attribute map
       * @return JSON string
       */
-    private def toJsonString(m: Map[String, Any]): String = {
-      val mJson: Map[String, JsonAST.JValue] = for {
+    private def mapToJson(m: Map[String, Any]): Map[String, JsonAST.JValue] = {
+      for {
         (k, v) <- m
       } yield k -> (v match {
         case i: Int => JsonAST.JInt(i)
         case f: Float => JsonAST.JDouble(f)
         case d: Double => JsonAST.JDouble(d)
         case s: String => JsonAST.JString(s)
+        case xs: List[String] => JsonAST.JArray(xs map JsonAST.JString)
         case _ => JsonAST.JNothing
       })
-      json.compactRender(mJson)
     }
+
+    private def toJsonString(jsonMap: Map[String, JsonAST.JValue]) =
+      json.compactRender(jsonMap)
 
     /**
       * Creates JSON string from XML string
@@ -65,7 +68,7 @@ object XMLToJSONConverter {
       * @return single line JSON string
       */
     def xmlToJson(line: String): String =
-      toJsonString(getAttributes(loadString(line)))
+      toJsonString(mapToJson(getAttributes(loadString(line))))
 
   }
 

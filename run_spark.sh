@@ -1,14 +1,14 @@
 #!/bin/bash
 
 if [ $# -ne 0 ]; then
-  echo $0: "usage: ./run_spark.sh input" 
+  echo $0: "usage: ./run_spark.sh" 
   exit 1
 fi
 
 echo $SPARK_HOME
 
-input1=src/main/resources/Posts.xml
-output=output
+input1=src/test/resources/Posts.xml
+output=output/$(date "+%Y-%m-%d_%H.%M.%S")
 
 echo Reading input from $input1
 echo Writing output to $output

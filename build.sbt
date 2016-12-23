@@ -30,7 +30,9 @@ lazy val core = (project in file(".")).
     mainClass in assembly := Some("edu.vanderbilt.accre.stackex.StackExApp"),
     libraryDependencies ++= Seq(
       "org.apache.spark" %% "spark-core" % "1.6.2" % "provided",
-      "org.apache.spark" %% "spark-sql" % "1.6.2" % "provided"
+      "org.apache.spark" %% "spark-sql" % "1.6.2" % "provided",
+      "net.sourceforge.htmlcleaner" % "htmlcleaner" % "2.18",
+      "com.databricks" %% "spark-xml" % "0.4.1"
     )
   ).
   dependsOn(util)

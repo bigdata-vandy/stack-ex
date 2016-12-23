@@ -1,12 +1,12 @@
-/**
-  * Created by arnold-jr on 11/7/16.
-  */
 import edu.vanderbilt.accre.xmltojson.XMLToJSONConverter
+import net.liftweb.json.JsonAST
 
 import scala.xml.{Node, NodeSeq}
 import org.scalatest.{PrivateMethodTester, WordSpec}
 
-
+/**
+  * Created by arnold-jr on 11/7/16.
+  */
 class TestXMLtoJSONConverter extends WordSpec with PrivateMethodTester {
 
   "A converter" when {
@@ -25,7 +25,7 @@ class TestXMLtoJSONConverter extends WordSpec with PrivateMethodTester {
           }
         }
 
-        "passed a valid XML string" should {
+        "passed  valid XML string" should {
           "have type XML.Node" in {
             assert(loadString("<a></a>").isInstanceOf[Node])
           }
@@ -58,28 +58,46 @@ class TestXMLtoJSONConverter extends WordSpec with PrivateMethodTester {
     }
 
 
-    "invoking toJsonString" when {
+    "invoking mapToJson" when {
       val converter = XMLToJSONConverter(List("foo"))
-      val decorateToJsonString =
-        PrivateMethod[String]('toJsonString)
-      def toJsonString(m: Map[String, Any]) =
-        converter invokePrivate decorateToJsonString(m)
+      val decorateMapToJson =
+        PrivateMethod[Map[String, JsonAST.JValue]]('mapToJson)
+      def mapToJson(m: Map[String, Any]) =
+        converter invokePrivate decorateMapToJson(m)
 
       "passed an empty map " should {
-        "return an empty JSON string" in {
-          assert(toJsonString(Map.empty[String, Any]) == "{}")
+        "return a map to an empty Json value" in {
+          assert(mapToJson(Map.empty[String, Any]) ==
+            Map.empty[String, JsonAST.JValue]
+          )
         }
       }
 
       "passed a Map[String, String] " should {
-        "return a JSON string of strings" in {
-          assert(toJsonString(Map("foo" -> "bar")) == "{\"foo\":\"bar\"}")
+        "return a map to a JString" in {
+          assert(mapToJson(Map("foo" -> "bar")) ==
+            Map("foo" -> JsonAST.JString("bar"))
+          )
         }
       }
 
       "passed a Map[String, Int] " should {
-        "return a JSON object of String:Int" in {
-          assert(toJsonString(Map("foo" -> 2)) == "{\"foo\":2}")
+        "return a map to a JInt" in {
+          assert(mapToJson(Map("foo" -> 2)) ==
+            Map("foo" -> JsonAST.JInt(2))
+          )
+        }
+      }
+      "passed a Map[String, List[String]] " should {
+        "return a map to a List[JString]" in {
+          assert(mapToJson(Map("foo" -> List("a", "b", "c"))) ==
+            Map("foo" ->
+              JsonAST.JArray(
+                List(JsonAST.JString("a"),
+                JsonAST.JString("b"),
+                JsonAST.JString("c")
+              )))
+          )
         }
       }
 

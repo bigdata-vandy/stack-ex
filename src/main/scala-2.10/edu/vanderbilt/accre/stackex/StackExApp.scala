@@ -1,11 +1,14 @@
-/** StackExApp.scala
-  * Created by arnold-jr on 11/8/16.
-  */
 package edu.vanderbilt.accre.stackex
 
 import edu.vanderbilt.accre.xmltojson.XMLToJSONConverter
+import org.apache.spark.sql.types.{StringType, StructField, StructType}
 import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.sql.SQLContext
 
+
+/** StackExApp.scala
+  * Created by arnold-jr on 11/8/16.
+  */
 
 object StackExApp {
 
@@ -25,24 +28,53 @@ object StackExApp {
 
     val conf = new SparkConf()
       .setAppName("Stack-Ex Application")
-
-
     val sc = new SparkContext(conf)
 
-    val postsXML = sc.textFile(postsFile)
 
-    val fString = (s: String) => s
-    val converter = XMLToJSONConverter(Map("Body" -> fString))
+    def xmlToCustomJson() = {
+      // Creates a new RDD with one XML element per line
+      val postsXML = sc.textFile(postsFile)
 
-    val postsJSON = postsXML
-      .map(line => converter.xmlToJson(line))
+      // Specifies how to convert the data
+      val attributeMapper = Map(
+        "Body" -> getTextFromHtml,
+        "Tags" -> getTags
+      )
 
-    if (true) {
-      (postsJSON take 10) foreach println
+      val converter = XMLToJSONConverter(attributeMapper)
+
+      val postsJSON = postsXML
+        .map(line => converter.xmlToJson(line))
+
+      if (true) {
+        (postsJSON take 10) foreach println
+      }
+
+      postsJSON.saveAsTextFile(outputFile)
+
     }
 
-    // Writes output to file
-    postsJSON.saveAsTextFile(outputFile)
+
+    def writeXMLToJSON() = {
+      val sqlContext = new SQLContext(sc)
+
+      import sqlContext.implicits._
+
+      // Creates a new DataFrame with one XML element per line
+      val df = sc.textFile(postsFile)
+        .map(line => Post(line))
+        .filter(p => p.id != Int.MinValue)
+        .toDF(Post.fieldNames: _*)
+
+      val postsJSON = df.toJSON
+
+      postsJSON take 5 foreach println
+
+      postsJSON.saveAsTextFile(outputFile)
+    }
+
+    writeXMLToJSON()
+
 
     sc.stop()
 
