@@ -7,7 +7,7 @@ import org.scalatest.{WordSpec}
 /**
   * Created by arnold-jr on 11/7/16.
   */
-class Testxmltools extends WordSpec {
+class TestXMLTools extends WordSpec {
 
   "loadString" when {
     "passed an invalid XML string " should {
