@@ -2,10 +2,10 @@ package edu.vanderbilt.accre.stackex
 
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification._
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator
 import org.apache.spark.sql.DataFrame
 import org.apache.spark.sql.functions.{col, udf}
 import org.apache.spark.ml.feature._
+import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
 import org.apache.spark.rdd.RDD
 
 
@@ -15,7 +15,16 @@ import org.apache.spark.rdd.RDD
 
 object StackExApp {
 
-  def parseArgs(args: Array[String]) = {
+  // Enables RDD.toDF() et al.
+  import SparkContextKeeper.sqlContext.implicits._
+
+  /**
+    * Parses application arguments to main function
+    *
+    * @param args space-delimted input arguments
+    * @return tuple of input and output files
+    */
+  def parseArgs(args: Array[String]): Tuple2[String, String] = {
     if (args.length != 2) {
       System.err.println(
         "Usage: StackExApp <postsFile> <outputFile>")
@@ -24,12 +33,17 @@ object StackExApp {
     (args(0), args(1))
   }
 
+  /**
+    * Reads input from disk and maps to [[Post]] records
+    * @param postsFile path to Posts.xml file
+    * @return RDD with one [[Post]] record per line
+    */
   def readPostsXML(postsFile: String): RDD[Post] = {
 
     import SparkContextKeeper.sc
 
     // Creates a new DataFrame with one row XML element per line
-    sc.textFile(postsFile)
+    sc.textFile(postsFile, 2)
       .map(line => Post(line))
       .filter(p => p.id != Int.MinValue)
   }
@@ -41,39 +55,63 @@ object StackExApp {
   }
 
   def writeXMLToJSON(postsFile: String, outputFile: String): Unit = {
-    import SparkContextKeeper.sqlContext.implicits._
     val df  = readPostsXML(postsFile).toDF(Post.fieldNames: _*)
     writeToJSON(df, outputFile)
   }
 
 
-  def learnTags(postsFile: String) = {
-    import SparkContextKeeper.sqlContext.implicits._
+  /**
+    * Learns to classify posts as questions or answers depending on the
+    * content of their "Body" attribute
+    * @param postsFile path to Posts.xml file
+    */
+  def learnPostType(postsFile: String): Unit = {
 
-    // UDF for extracting first tag from "Tags" column
-    val tagColFun = udf { tagSeq: Seq[String] => tagSeq.head }
-      .apply(col("Tags"))
+    val encodeLabel = udf[Double, Int]{_.toDouble}
+      .apply(col("postTypeId"))
 
-    // Filters out Posts that don't have bodies and tags
+    def cleanBody(s: String): String =
+      s.replaceAll("""\\s+""", " ")
+        //.replaceAll("""[\p{Punct}&&[^']]""", " ")
+
+    // Filters out Posts that don't have bodies
     val df = readPostsXML(postsFile)
-      .filter(p => p.tags.length > 0 && p.body.length > 0)
-      .map(p => p.copy(body = p.body.replaceAll("""[\p{Punct}&&[^']]""", "")))
-      .toDF(Post.fieldNames: _*)
-      .withColumn("labelWord", tagColFun)
+      .filter(p => p.body.length > 0)
+      .map{p => (p.postTypeId, cleanBody(p.body))}
+      .filter{
+        case (id: Int, body: String) =>
+          body.length > 0 && List(1, 2).contains(id)
+      }
+      .map{
+        case (1, b: String) => (0.0, b)
+        case (2, b: String) => (1.0, b)
+      }
+      .map{
+        case (x, b: String) => (x,
+          b,
+          b contains "?",
+          (b count(_ == "?")).toDouble,
+          (b length).toDouble
+        )
+      }
+      .toDF("labelString",
+        "body",
+        "hasQMark",
+        "numQMarks",
+        "numChars")
 
+    df.show()
+
+    val labelIndexer = new StringIndexer()
+      .setInputCol("labelString")
+      .setOutputCol("label")
 
     // Create the pipeline elements
 
-    // Create string labels to integers
-    val labelIndexer = new StringIndexer()
-      .setInputCol("labelWord")
-      .setOutputCol("label")
-      .fit(df)
-
     // Tokenize the string
     val tokenizer = new Tokenizer()
-      .setInputCol("Body")
-      .setOutputCol("words")
+      .setInputCol("body")
+      .setOutputCol("meaningfulWords")
 
     // Remove stop words
     val remover = new StopWordsRemover()
@@ -81,18 +119,18 @@ object StackExApp {
       .setOutputCol("meaningfulWords")
 
 
-    val numFeatures = 100
+    val numFeatures = 10000
 
-    /*
     // Use TF-IDF to extract features
     val hashingTF = new HashingTF()
       .setInputCol("meaningfulWords")
-      .setOutputCol("rawFeatures")
+      .setOutputCol("wordCounts")
       .setNumFeatures(numFeatures)
+
+    /*
     val idf = new IDF()
       .setInputCol("rawFeatures")
-      .setOutputCol("features")
-    */
+      .setOutputCol("word_count")
 
 
     // Use Word2Vec to extract features
@@ -101,86 +139,98 @@ object StackExApp {
       .setOutputCol("features")
       .setVectorSize(numFeatures)
       .setMinCount(0)
-
-    // Use a scaler
-    val scaler = new MinMaxScaler()
-      .setInputCol("features")
-      .setOutputCol("scaledFeatures")
+      */
 
 
-    /*
-    // Specify logistic regression
-    val lr = new LogisticRegression()
-      .setMaxIter(10)
-      .setRegParam(0.3)
-      .setElasticNetParam(0.8)
+    val assembler = new VectorAssembler()
+      .setInputCols(Array("wordCounts", "hasQMark", "numQMarks", "numChars"))
+      .setOutputCol("assembledFeatures")
 
-    val classifier =  new OneVsRest()
-      .setClassifier(lr)
-    */
+    // Finds features upon which labels depend most, according to the
+    // Chi-Squared test of independence
+    val selector = new ChiSqSelector()
+      .setNumTopFeatures(100)
+      .setLabelCol("label")
+      .setFeaturesCol("assembledFeatures")
+      .setOutputCol("features")
 
-    /*
     // Specify random forest classifier
     val classifier = new RandomForestClassifier()
-      .setFeaturesCol("scaledFeatures")
+      .setFeaturesCol("features")
       .setSeed(42L)
-    */
 
+
+    /*
     // Specify layers for the neural network:
-    // input layer of size 100 (features), two intermediate of size 5 and 4
-    // and output of size 12 (classes)
     val layers = Array[Int](
       numFeatures,
-      (3 * numFeatures).round.toInt,
-      (3 * numFeatures).round.toInt,
-      (3 * numFeatures).round.toInt,
-      (3 * numFeatures).round.toInt,
-      (3 * numFeatures).round.toInt,
-      (3 * numFeatures).round.toInt,
-      (3 * numFeatures).round.toInt,
-      (3 * numFeatures).round.toInt,
-      (3 * numFeatures).round.toInt,
-      (1 * numFeatures).round.toInt,
       numFeatures,
-      labelIndexer.labels.length)
+      2)
 
     val classifier = new MultilayerPerceptronClassifier()
       .setLayers(layers)
       .setSeed(42L)
-      //.setFeaturesCol("scaledFeatures")
+    */
 
     // Specify pipeline
     val pipeline = new Pipeline()
       .setStages(
-        Array(labelIndexer, tokenizer, remover, word2Vec, classifier)
+        Array(
+          labelIndexer,
+          tokenizer,
+          hashingTF,
+          assembler,
+          selector,
+          classifier
+        )
       )
-      /*
-      .setStages(
-        Array(labelIndexer, tokenizer, remover, hashingTF, idf, classifier)
-      )
-       */
+
 
     // Split data into train and test
     val Array(train, test) = df
       .randomSplit(Array(0.7, 0.3), seed = 42L)
 
+
     // Fit the model
     val model = pipeline.fit(train)
 
+    // Compute precision on train set
+    val resultTrain = model.transform(train)
+
     // Compute precision on the test set
-    val result = model.transform(test)
-    //DEBUG
-    result.show()
+    val resultCV = model.transform(test)
 
-    val evaluator = new MulticlassClassificationEvaluator()
-      .setMetricName("precision")
-      .setLabelCol("label")
-      .setPredictionCol("prediction")
-    println("Precision: " + evaluator.evaluate(result))
+    // Metrics
+    val metricsTrain = new BinaryClassificationMetrics(
+      resultTrain.select("prediction","label").as[(Double, Double)].rdd
+    )
+    val auROCTrain = metricsTrain.areaUnderROC
 
-    result.select("meaningfulWords").take(5).foreach(println)
+    val metricsCV = new BinaryClassificationMetrics(
+      resultCV.select("prediction","label").as[(Double, Double)].rdd
+    )
+    val auROC = metricsCV.areaUnderROC
+    println(s"Area under ROC: Train = $auROCTrain CV = $auROC")
+
+    // F-measure
+    val f1ScoreTrain = metricsTrain.fMeasureByThreshold
+    f1ScoreTrain.foreach { case (t, f) =>
+      println(s"Threshold Train: $t, F-score: $f, Beta = 1")
+    }
+
+    val f1ScoreCV = metricsCV.fMeasureByThreshold
+    f1ScoreCV.foreach { case (t, f) =>
+      println(s"Threshold CV: $t, F-score: $f, Beta = 1")
+    }
+
+    // Precision by threshold
+    val precisionCV = metricsCV.precisionByThreshold
+    precisionCV.foreach { case (t, p) =>
+      println(s"Threshold CV: $t, Precision: $p")
+    }
 
   }
+
 
   def main(args: Array[String]): Unit = {
 
@@ -188,7 +238,7 @@ object StackExApp {
 
     //writeXMLToJSON(postsFile, outputFile)
 
-    learnTags(postsFile)
+    learnPostType(postsFile)
 
     SparkContextKeeper.stop()
 
