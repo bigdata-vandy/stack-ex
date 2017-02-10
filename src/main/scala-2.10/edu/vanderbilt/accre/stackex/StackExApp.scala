@@ -3,7 +3,6 @@ package edu.vanderbilt.accre.stackex
 import org.apache.spark.ml.Pipeline
 import org.apache.spark.ml.classification._
 import org.apache.spark.sql.DataFrame
-import org.apache.spark.sql.functions.{col, udf}
 import org.apache.spark.ml.feature._
 import org.apache.spark.mllib.evaluation.BinaryClassificationMetrics
 import org.apache.spark.rdd.RDD
@@ -13,13 +12,18 @@ import org.apache.spark.rdd.RDD
   * Created by arnold-jr on 11/8/16.
   */
 
+/**
+  * Runs Spark app for processing Posts.xml files from the
+  * Stack Exchange Data Dump [https://archive.org/details/stackexchange].
+  *
+  */
 object StackExApp {
 
   // Enables RDD.toDF() et al.
   import SparkContextKeeper.sqlContext.implicits._
 
   /**
-    * Parses application arguments to main function
+    * Parses application arguments to main function.
     *
     * @param args space-delimted input arguments
     * @return tuple of input and output files
@@ -34,7 +38,9 @@ object StackExApp {
   }
 
   /**
-    * Reads input from disk and maps to [[Post]] records
+    * Reads input from disk and maps to
+    * [[edu.vanderbilt.accre.stackex.Post]] records.
+    *
     * @param postsFile path to Posts.xml file
     * @return RDD with one [[Post]] record per line
     */
@@ -48,12 +54,24 @@ object StackExApp {
       .filter(p => p.id != Int.MinValue)
   }
 
-  def writeToJSON(df: DataFrame, outputFile: String) = {
+  /**
+    * Saves a [[DataFrame]] as lines of JSON.
+    *
+    * @param df [[DataFrame]] to write
+    * @param outputPath path to output directory
+    */
+  def writeToJSON(df: DataFrame, outputPath: String) = {
     val postsJSON = df.toJSON
     postsJSON take 25 foreach println
-    postsJSON.saveAsTextFile(outputFile)
+    postsJSON.saveAsTextFile(outputPath)
   }
 
+  /**
+    * Reads a Posts.xml file and writes to lines of JSON.
+    *
+    * @param postsFile input Posts.xml path
+    * @param outputFile output directory path
+    */
   def writeXMLToJSON(postsFile: String, outputFile: String): Unit = {
     val df  = readPostsXML(postsFile).toDF(Post.fieldNames: _*)
     writeToJSON(df, outputFile)
@@ -62,29 +80,37 @@ object StackExApp {
 
   /**
     * Learns to classify posts as questions or answers depending on the
-    * content of their "Body" attribute
+    * content of their "Body" attribute.
+    *
     * @param postsFile path to Posts.xml file
     */
   def learnPostType(postsFile: String): Unit = {
 
-    val encodeLabel = udf[Double, Int]{_.toDouble}
-      .apply(col("postTypeId"))
-
+    /**
+      * Transforms a string into a more appropriate format.
+      *
+      * Much of the necessary tranformation is taken care of by the
+      * [[Tokenizer]] class.
+      *
+      * Steps:
+      * 1. Replaces multiple whitespace characters with a single space.
+      *
+      * @param s body text
+      * @return transformed text
+      */
     def cleanBody(s: String): String =
       s.replaceAll("""\\s+""", " ")
         //.replaceAll("""[\p{Punct}&&[^']]""", " ")
 
-    // Filters out Posts that don't have bodies
+    /**
+      * Creates the desired DataFrame with desired types (i.e. [[Double]])
+      */
     val df = readPostsXML(postsFile)
       .filter(p => p.body.length > 0)
       .map{p => (p.postTypeId, cleanBody(p.body))}
       .filter{
         case (id: Int, body: String) =>
           body.length > 0 && List(1, 2).contains(id)
-      }
-      .map{
-        case (1, b: String) => (0.0, b)
-        case (2, b: String) => (1.0, b)
       }
       .map{
         case (x, b: String) => (x,
@@ -100,13 +126,15 @@ object StackExApp {
         "numQMarks",
         "numChars")
 
-    df.show()
+    df.show(10)
 
+    // Create the pipeline elements
+
+    // Labels must be numeric
     val labelIndexer = new StringIndexer()
       .setInputCol("labelString")
       .setOutputCol("label")
 
-    // Create the pipeline elements
 
     // Tokenize the string
     val tokenizer = new Tokenizer()
@@ -224,9 +252,13 @@ object StackExApp {
     }
 
     // Precision by threshold
-    val precisionCV = metricsCV.precisionByThreshold
-    precisionCV.foreach { case (t, p) =>
+    metricsCV.precisionByThreshold.foreach { case (t, p) =>
       println(s"Threshold CV: $t, Precision: $p")
+    }
+
+    // Recall by threshold
+    metricsCV.recallByThreshold.foreach { case (t, r) =>
+      println(s"Threshold CV: $t, Recall: $r")
     }
 
   }
